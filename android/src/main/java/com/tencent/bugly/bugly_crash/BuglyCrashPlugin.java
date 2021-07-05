@@ -1,12 +1,16 @@
 package com.tencent.bugly.bugly_crash;
 
+import io.flutter.embedding.engine.plugins.FlutterPlugin;
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler;
 import io.flutter.plugin.common.MethodChannel.Result;
-import io.flutter.plugin.common.PluginRegistry.Registrar;
 import com.tencent.bugly.crashreport.CrashReport;
+
 import android.content.Context;
+
+import androidx.annotation.NonNull;
+
 import java.util.Map;
 import com.tencent.bugly.crashreport.BuglyLog;
 /**
@@ -14,13 +18,18 @@ import com.tencent.bugly.crashreport.BuglyLog;
  * @author rockypzhang
  * @since 2019/5/28
  */
-public class BuglyCrashPlugin implements MethodCallHandler {
+public class BuglyCrashPlugin implements FlutterPlugin, MethodCallHandler {
   /** Plugin registration. */
-  private static Context mContext;
-  public static void registerWith(Registrar registrar) {
-    final MethodChannel channel = new MethodChannel(registrar.messenger(), "bugly");
-    mContext = registrar.activeContext();
-    channel.setMethodCallHandler(new BuglyCrashPlugin());
+  private static volatile Context mContext;
+  public static MethodChannel channel;
+  private static final String TAG = "CrashReport";
+  public static BuglyCrashPlugin instance;
+  @Override
+  public void onAttachedToEngine(@NonNull FlutterPlugin.FlutterPluginBinding flutterPluginBinding) {
+    channel = new MethodChannel(flutterPluginBinding.getBinaryMessenger(), "bugly");
+    channel.setMethodCallHandler(this);
+    mContext = flutterPluginBinding.getApplicationContext();
+    instance = this;
   }
 
   /**
@@ -43,8 +52,12 @@ public class BuglyCrashPlugin implements MethodCallHandler {
         isDebug = call.argument("isDebug");
         BuglyCrashPluginLog.isEnable = isDebug;
       }
-      CrashReport.initCrashReport(mContext, appId, isDebug);
-      BuglyCrashPluginLog.d("onMethodCall initCrashReport");
+      try {
+        CrashReport.initCrashReport(mContext, appId, isDebug);
+        BuglyCrashPluginLog.d("======>>>>>>>>>> + onMethodCall initCrashReport");
+      } catch (Exception e) {
+        BuglyCrashPluginLog.d("======>>>>>>>>>> +" + e.toString());
+      }
     } else if (call.method.equals("postException")){
       String type = "";
       String error = "";
@@ -63,7 +76,7 @@ public class BuglyCrashPlugin implements MethodCallHandler {
         extraInfo = call.argument("extraInfo");
       }
       BuglyCrashPluginLog.d("type:"+type+"error:"+error+" stackTrace:"+stackTrace
-        +"extraInfo:"+extraInfo);
+              +"extraInfo:"+extraInfo);
       int category = 8;
       CrashReport.postException(category,type,error,stackTrace,extraInfo);
     }else if (call.method.equals("setAppChannel")){
@@ -135,7 +148,6 @@ public class BuglyCrashPlugin implements MethodCallHandler {
    * 打印上报用户自定义日志
    *
    * @param call flutter方法回调
-   * @param content 内容
    */
   private void buglyLog(MethodCall call){
     String tag = "";
@@ -158,5 +170,10 @@ public class BuglyCrashPlugin implements MethodCallHandler {
       BuglyLog.e(tag,content);
     }
     BuglyCrashPluginLog.d("tag:"+tag+" content:"+content);
+  }
+
+  @Override
+  public void onDetachedFromEngine(@NonNull FlutterPluginBinding binding) {
+    channel.setMethodCallHandler(null);
   }
 }
